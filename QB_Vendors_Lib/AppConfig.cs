@@ -8,6 +8,6 @@ namespace QB_Vendors_Lib
 {
     public static class AppConfig
     {
-        public static string QB_APP_NAME = "VendorSync";
+        public static string QB_APP_NAME = "QBSync";
     }
 }
