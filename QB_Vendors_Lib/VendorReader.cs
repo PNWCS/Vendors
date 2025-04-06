@@ -23,7 +23,7 @@ namespace QB_Vendors_Lib
         //        .CreateLogger();
         //}
 
-       // private static readonly ILogger Logger = Log.Logger;
+        // private static readonly ILogger Logger = Log.Logger;
         public static List<Vendor> QueryAllVendors()
         {
             bool sessionBegun = false;
