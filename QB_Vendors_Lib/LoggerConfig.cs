@@ -1,6 +1,8 @@
 ﻿using Serilog;
+using Serilog.Events;
 
-namespace QB_Vendors_CLI
+
+namespace QB_Vendors_Lib
 {
     public static class LoggerConfig
     {
@@ -17,7 +19,7 @@ namespace QB_Vendors_CLI
                     retainedFileCountLimit: 7,
                     fileSizeLimitBytes: 5_000_000,
                     rollOnFileSizeLimit: true,
-                    restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Information)
+                    restrictedToMinimumLevel: LogEventLevel.Information)
                 .CreateLogger();
         }
 
@@ -28,6 +30,4 @@ namespace QB_Vendors_CLI
             Log.CloseAndFlush();
         }
     }
-
-
 }

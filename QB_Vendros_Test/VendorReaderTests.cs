@@ -1,12 +1,9 @@
 ﻿using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using Serilog;
-using QB_Vendors_Lib;  // Assumes Vendor, VendorReader, AppConfig, etc. are defined here.
-using QBFC16Lib;       // For QuickBooks session and API interaction.
-using Xunit;
+using QB_Vendors_Lib;
+using QBFC16Lib;         // For QuickBooks session and API interaction.
 using static QB_Vendors_Test.CommonMethods;
-using System.Numerics;
+using QB_Vendors_Test;
 
 namespace QB_Vendors_Test
 {
@@ -50,7 +47,7 @@ namespace QB_Vendors_Test
             // 5) Verify that all added vendors are present in QuickBooks.
             foreach (var vendor in vendorsToAdd)
             {
-                var matchingVendor = allQBVendors.FirstOrDefault(v => v.QB_ID == vendor.QB_ID);
+                var matchingVendor = allQBVendors.FirstOrDefault(c => c.QB_ID == vendor.QB_ID);
                 Assert.NotNull(matchingVendor);
                 Assert.Equal(vendor.Name, matchingVendor.Name);
                 Assert.Equal(vendor.Fax, matchingVendor.Fax);
@@ -59,7 +56,7 @@ namespace QB_Vendors_Test
             // 6) Cleanup: Delete the added vendors.
             using (var qbSession = new QuickBooksSession(AppConfig.QB_APP_NAME))
             {
-                foreach (var vendor in vendorsToAdd.Where(v => !string.IsNullOrEmpty(v.QB_ID)))
+                foreach (var vendor in vendorsToAdd.Where(c => !string.IsNullOrEmpty(c.QB_ID)))
                 {
                     DeleteVendor(qbSession, vendor.QB_ID);
                 }
@@ -90,7 +87,7 @@ namespace QB_Vendors_Test
         private string AddVendor(QuickBooksSession qbSession, string name, string fax)
         {
             IMsgSetRequest requestMsgSet = qbSession.CreateRequestSet();
-            IVendorAddRq vendorAddRq = requestMsgSet.AppendVendorAddRq();
+            IVendorAdd vendorAddRq = requestMsgSet.AppendVendorAddRq();
             vendorAddRq.Name.SetValue(name);
             vendorAddRq.Fax.SetValue(fax);
             // Additional vendor fields can be set here as needed.
@@ -109,7 +106,6 @@ namespace QB_Vendors_Test
             if (response.StatusCode != 0)
                 throw new Exception($"VendorAdd failed: {response.StatusMessage}");
 
-            // Attempt to cast the response detail to IVendorRet.
             IVendorRet? vendorRet = response.Detail as IVendorRet;
             if (vendorRet == null)
                 throw new Exception("No IVendorRet returned after adding Vendor.");

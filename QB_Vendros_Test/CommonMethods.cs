@@ -1,4 +1,5 @@
-﻿using Serilog;
+﻿using QB_Vendors_Lib;
+using Serilog;
 
 namespace QB_Vendors_Test
 {

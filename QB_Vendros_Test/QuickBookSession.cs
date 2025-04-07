@@ -1,4 +1,5 @@
-﻿using QBFC16Lib;
+﻿using Microsoft.VisualBasic;
+using QBFC16Lib;
 
 namespace QB_Vendors_Test
 {
