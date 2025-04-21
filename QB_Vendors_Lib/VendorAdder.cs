@@ -59,5 +59,5 @@ namespace QB_Vendors_Lib
         }
     }
 
-   
+
 }
