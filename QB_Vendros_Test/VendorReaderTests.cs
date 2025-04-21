@@ -27,8 +27,8 @@ namespace QB_Vendors_Test
             {
                 string randomName = "TestVendor_" + Guid.NewGuid().ToString("N").Substring(0, 8);
                 int companyID = STARTING_COMPANY_ID + i;
-                string fax = companyID.ToString();
-                vendorsToAdd.Add(new Vendor(randomName, fax));
+                string companyName = companyID.ToString();
+                vendorsToAdd.Add(new Vendor(randomName, companyName));
             }
 
             // 3) Add vendors directly to QuickBooks.
@@ -36,7 +36,7 @@ namespace QB_Vendors_Test
             {
                 foreach (var vendor in vendorsToAdd)
                 {
-                    string qbID = AddVendor(qbSession, vendor.Name, vendor.Fax);
+                    string qbID = AddVendor(qbSession, vendor.Name, vendor.CompanyName);
                     vendor.QB_ID = qbID; // Store the returned QB ListID.
                 }
             }
@@ -50,7 +50,7 @@ namespace QB_Vendors_Test
                 var matchingVendor = allQBVendors.FirstOrDefault(c => c.QB_ID == vendor.QB_ID);
                 Assert.NotNull(matchingVendor);
                 Assert.Equal(vendor.Name, matchingVendor.Name);
-                Assert.Equal(vendor.Fax, matchingVendor.Fax);
+                Assert.Equal(vendor.CompanyName, matchingVendor.CompanyName);
             }
 
             // 6) Cleanup: Delete the added vendors.

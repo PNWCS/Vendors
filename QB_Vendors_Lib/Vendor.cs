@@ -9,13 +9,13 @@ namespace QB_Vendors_Lib
     public class Vendor
     {
         public string Name { get; set; }
-        public string Fax { get; set; }
+        public string CompanyName { get; set; }
         public string QB_ID { get; set; }
 
-        public Vendor(string name, string fax)
+        public Vendor(string name, string companyName)
         {
             Name = name;
-            Fax = fax;
+            CompanyName = companyName;
         }
     }
 }
