@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Serilog;
 
 using QBFC16Lib;
-using Microsoft.VisualBasic;
 
 namespace QB_Vendors_Lib
 {
@@ -108,15 +107,15 @@ namespace QB_Vendors_Lib
                                     if (VendorRet != null)
                                     {
                                         var name = VendorRet.Name != null ? VendorRet.Name.GetValue() : string.Empty;
-                                        var fax = VendorRet.Fax != null ? VendorRet.Fax.GetValue() : string.Empty;
+                                        var companyName = VendorRet.CompanyName != null ? VendorRet.CompanyName.GetValue() : string.Empty;
                                         var id = VendorRet.ListID != null ? VendorRet.ListID.GetValue() : string.Empty;
-                                        var vendor = new Vendor(name, fax);
+                                        var vendor = new Vendor(name, companyName);
                                         vendor.QB_ID = id;
                                         vendors.Add(vendor);
 
-                                        // Console.WriteLine($"Vendor Name: {vendor.Name}, Fax: {vendor.Fax}");
-                                        Log.Information("Successfully retrieved {Name} from QB", vendor.Name, vendor.Fax);
-                                        Log.Information("Vendor Name: {Name}, Fax: {Fax}", vendor.Name, vendor.Fax);
+                                        // Console.WriteLine($"Vendor Name: {vendor.Name}, CompanyName: {vendor.CompanyName}");
+                                        Log.Information("Successfully retrieved {Name} from QB", vendor.Name, vendor.CompanyName);
+                                        Log.Information("Vendor Name: {Name}, CompanyName: {CompanyName}", vendor.Name, vendor.CompanyName);
                                     }
                                 }
                             }
