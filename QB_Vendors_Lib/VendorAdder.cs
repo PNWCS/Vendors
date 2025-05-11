@@ -1,18 +1,19 @@
-﻿using QBFC16Lib;
+﻿using System.Diagnostics;
+using QBFC16Lib;
 using Serilog;
-using System;
-using System.Collections.Generic;
-using QB_Vendors_Lib;
 
 namespace QB_Vendors_Lib
 {
     public class VendorAdder
     {
+        // QuickBooks field length limits
+        private const int QB_NAME_MAX_LENGTH = 20;
+        private const int QB_FAX_MAX_LENGTH = 20;
+
         static VendorAdder()
         {
             LoggerConfig.ConfigureLogging(); // Safe to call (only initializes once)
             Log.Information("VendorAdder Initialized.");
-            // Initialize the QuickBooks session manager here if needed.
         }
 
         public static void AddVendors(List<Vendor> vendorInfo)
@@ -21,19 +22,25 @@ namespace QB_Vendors_Lib
             {
                 foreach (var vendor in vendorInfo)
                 {
-                    string qbID = AddVendor(qbSession, vendor.Name, vendor.CompanyName);
+                    string qbID = AddVendor(qbSession, vendor.Name, vendor.Fax, vendor.Company_ID);
                     vendor.QB_ID = qbID; // Store the returned QB ListID.
                 }
             }
             Log.Information("VendorAdder Completed");
         }
 
-        private static string AddVendor(QuickBooksSession qbSession, string name, string companyName)
+        private static string AddVendor(QuickBooksSession qbSession, string name, string fax, string companyId)
         {
+            // Truncate values to field limits
+            name = name?.Length > QB_NAME_MAX_LENGTH ? name[..QB_NAME_MAX_LENGTH] : name;
+            fax = fax?.Length > QB_FAX_MAX_LENGTH ? fax[..QB_FAX_MAX_LENGTH] : fax;
+
             IMsgSetRequest requestMsgSet = qbSession.CreateRequestSet();
             IVendorAdd vendorAddRq = requestMsgSet.AppendVendorAddRq();
+            Debug.WriteLine($"Adding Vendor: {name}, Fax: {fax}");
             vendorAddRq.Name.SetValue(name);
-            vendorAddRq.CompanyName.SetValue(companyName);
+            vendorAddRq.Fax.SetValue(fax);
+            vendorAddRq.AccountNumber.SetValue(companyId.ToString());
             // Additional vendor fields can be set here as needed.
 
             IMsgSetResponse responseMsgSet = qbSession.SendRequest(requestMsgSet);
@@ -58,6 +65,4 @@ namespace QB_Vendors_Lib
                 ?? throw new Exception("ListID is missing in QuickBooks response.");
         }
     }
-
-
 }

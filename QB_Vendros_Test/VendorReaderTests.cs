@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics;
 using Serilog;
-using QB_Vendors_Lib;
-using QBFC16Lib;         // For QuickBooks session and API interaction.
+using QB_Vendors_Lib; // For VendorReader and other related classes.
+using QBFC16Lib;      // For QuickBooks session and API interaction.
 using static QB_Vendors_Test.CommonMethods;
 using QB_Vendors_Test;
 
@@ -27,8 +27,8 @@ namespace QB_Vendors_Test
             {
                 string randomName = "TestVendor_" + Guid.NewGuid().ToString("N").Substring(0, 8);
                 int companyID = STARTING_COMPANY_ID + i;
-                string companyName = companyID.ToString();
-                vendorsToAdd.Add(new Vendor(randomName, companyName));
+                string fax = companyID.ToString();
+                vendorsToAdd.Add(new Vendor(randomName, fax));
             }
 
             // 3) Add vendors directly to QuickBooks.
@@ -36,7 +36,7 @@ namespace QB_Vendors_Test
             {
                 foreach (var vendor in vendorsToAdd)
                 {
-                    string qbID = AddVendor(qbSession, vendor.Name, vendor.CompanyName);
+                    string qbID = AddVendor(qbSession, vendor.Name, vendor.Fax);
                     vendor.QB_ID = qbID; // Store the returned QB ListID.
                 }
             }
@@ -47,16 +47,16 @@ namespace QB_Vendors_Test
             // 5) Verify that all added vendors are present in QuickBooks.
             foreach (var vendor in vendorsToAdd)
             {
-                var matchingVendor = allQBVendors.FirstOrDefault(c => c.QB_ID == vendor.QB_ID);
+                var matchingVendor = allQBVendors.FirstOrDefault(v => v.QB_ID == vendor.QB_ID);
                 Assert.NotNull(matchingVendor);
                 Assert.Equal(vendor.Name, matchingVendor.Name);
-                Assert.Equal(vendor.CompanyName, matchingVendor.CompanyName);
+                Assert.Equal(vendor.Fax, matchingVendor.Fax);
             }
 
             // 6) Cleanup: Delete the added vendors.
             using (var qbSession = new QuickBooksSession(AppConfig.QB_APP_NAME))
             {
-                foreach (var vendor in vendorsToAdd.Where(c => !string.IsNullOrEmpty(c.QB_ID)))
+                foreach (var vendor in vendorsToAdd.Where(v => !string.IsNullOrEmpty(v.QB_ID)))
                 {
                     DeleteVendor(qbSession, vendor.QB_ID);
                 }
