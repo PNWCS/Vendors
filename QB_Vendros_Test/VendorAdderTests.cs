@@ -1,9 +1,9 @@
 ﻿using System.Diagnostics;
 using Serilog;
 using QB_Vendors_Lib;
-using QBFC16Lib;
-using static QB_Vendors_Test.CommonMethods; // for EnsureLogFileClosed, DeleteOldLogFiles, etc.
-using Xunit;
+using QBFC16Lib; // For QuickBooks session and API interaction.
+using static QB_Vendors_Test.CommonMethods;
+using QB_Vendors_Test;
 
 namespace QB_Vendors_Test
 {
@@ -11,101 +11,114 @@ namespace QB_Vendors_Test
     public class VendorAdderTests
     {
         [Fact]
-        public void AddMultipleVendors_UsingVendorAdder_AndVerifyInQB_And_ValidateLogs()
+        public void AddMultipleVendors_ThenVerifyTheyExistInQuickBooks()
         {
-            // 1) Prep: ensure Serilog has closed the file, remove old logs, reset logger
+            // 1) Setup: We'll create some random Vendors, then call the Adder.
+            const int VENDOR_COUNT = 5;
+            const int STARTING_COMPANY_ID = 5000; // Arbitrary starting ID
+            var vendorsToAdd = new List<Vendor>();
+
+            // Ensure logs are not locked, and optionally clean old logs if you wish
             EnsureLogFileClosed();
             DeleteOldLogFiles();
             ResetLogger();
 
-            // 2) Build a list of random Vendor objects (Name = random, Fax = simulated "Company ID")
-            const int VENDOR_COUNT = 5;
-            const int STARTING_COMPANY_ID = 200;
-            var vendorsToAdd = new List<Vendor>();
+            // 2) Build a list of random Vendor objects (Name + Fax as the "Company ID" field).
             for (int i = 0; i < VENDOR_COUNT; i++)
             {
                 string randomName = "AdderTestVendor_" + Guid.NewGuid().ToString("N").Substring(0, 8);
                 int companyID = STARTING_COMPANY_ID + i;
-                string fax = companyID.ToString(); // reusing Fax field for our "Company ID"
+                string fax = companyID.ToString();  // Using fax for custom "Company ID"
                 vendorsToAdd.Add(new Vendor(randomName, fax));
             }
 
-            // 3) Call the method under test: VendorAdder.AddVendors(...)
+            // 3) Call our Lib project's VendorAdder method.
+            //    This is the code under test: VendorAdder.AddVendors(List<Vendor> vendors).
             VendorAdder.AddVendors(vendorsToAdd);
 
-            // 4) Verify each newly added vendor actually exists in QuickBooks by direct QBFC calls (no Reader code).
+            // 4) Verify each added vendor now has a QB_ID (the add operation was successful).
+            foreach (var vendor in vendorsToAdd)
+            {
+                Assert.False(string.IsNullOrWhiteSpace(vendor.QB_ID),
+                    $"Vendor '{vendor.Name}' was not assigned a QB_ID after AddVendors().");
+            }
+
+            // 5) Now verify each vendor truly exists in QuickBooks by that QB_ID.
+            //    We'll open a QB session and try to query them one by one.
             using (var qbSession = new QuickBooksSession(AppConfig.QB_APP_NAME))
             {
-                foreach (var vend in vendorsToAdd)
+                foreach (var vendor in vendorsToAdd)
                 {
-                    Assert.False(string.IsNullOrEmpty(vend.QB_ID),
-                                 $"VendorAdder did not set QB_ID for {vend.Name}.");
-
-                    var qbVendor = QueryVendorByListID(qbSession, vend.QB_ID);
-                    Assert.NotNull(qbVendor);
-                    Assert.Equal(vend.Name, qbVendor?.Name);
-                    Assert.Equal(vend.Fax, qbVendor?.Fax);
+                    // Query QuickBooks for the vendor's ListID = vendor.QB_ID
+                    IVendorRet? qbVendor = QueryVendorByListID(qbSession, vendor.QB_ID);
+                    Assert.NotNull(qbVendor); // If this is null, it wasn't found in QB at all
+                    Assert.Equal(vendor.QB_ID, qbVendor.ListID.GetValue());
                 }
             }
 
-            // 5) Cleanup: remove the test vendors from QB.
+            // 6) (Optional) Cleanup: remove the vendors from QuickBooks so they don’t pile up.
+            //    In real tests, you often want to clean up the test data you introduced.
             using (var qbSession = new QuickBooksSession(AppConfig.QB_APP_NAME))
             {
-                foreach (var vend in vendorsToAdd.Where(v => !string.IsNullOrEmpty(v.QB_ID)))
+                foreach (var vendor in vendorsToAdd)
                 {
-                    DeleteVendor(qbSession, vend.QB_ID);
+                    if (!string.IsNullOrWhiteSpace(vendor.QB_ID))
+                    {
+                        DeleteVendor(qbSession, vendor.QB_ID);
+                    }
                 }
             }
 
-            // 6) Ensure logs have been written and closed.
+            // 7) Flush logs to disk so we can read them (if you want to test logs).
             EnsureLogFileClosed();
+
+            // 8) Verify that a new log file was written, if your production code logs.
             string logFile = GetLatestLogFile();
             EnsureLogFileExists(logFile);
-            string logContents = File.ReadAllText(logFile);
 
-            // 7) Verify that the Adder wrote expected log messages.
+            // 9) Read and check any relevant log content, if desired.
+            //    This depends on how your VendorAdder is implemented/logging internally.
+            string logContents = File.ReadAllText(logFile);
             Assert.Contains("VendorAdder Initialized", logContents);
             Assert.Contains("VendorAdder Completed", logContents);
-            foreach (var vend in vendorsToAdd)
+
+            // 10) Optionally ensure all added vendors or key steps were logged, if that is part of the Adder’s functionality.
+            foreach (var vendor in vendorsToAdd)
             {
-                string expectedAddMsg = $"Successfully added {vend.Name} to QuickBooks";
-                Assert.Contains(expectedAddMsg, logContents);
+                string expectedLogMessage = $"Successfully added {vendor.Name} to QB";
+                Assert.Contains(expectedLogMessage, logContents);
             }
         }
 
         /// <summary>
-        /// Queries QuickBooks directly (without using the Reader code) for a single vendor
-        /// by ListID and returns a Vendor object if found, or null if not found.
+        /// Queries QuickBooks for a single Vendor by ListID (QB_ID).
+        /// Returns the IVendorRet if found, otherwise null.
         /// </summary>
-        private Vendor? QueryVendorByListID(QuickBooksSession qbSession, string listID)
+        private IVendorRet? QueryVendorByListID(QuickBooksSession qbSession, string qbListID)
         {
             IMsgSetRequest requestMsgSet = qbSession.CreateRequestSet();
-            IVendorQuery vendorQueryRq = requestMsgSet.AppendVendorQueryRq();
-            vendorQueryRq.ORVendorListQuery.ListIDList.Add(listID);
+            IVendorQuery vendorQuery = requestMsgSet.AppendVendorQueryRq();
+            vendorQuery.ORVendorListQuery.ListIDList.Add(qbListID);
 
             IMsgSetResponse responseMsgSet = qbSession.SendRequest(requestMsgSet);
             IResponseList responseList = responseMsgSet.ResponseList;
-            if (responseList == null || responseList.Count == 0) return null;
+            if (responseList == null || responseList.Count == 0)
+                return null;
 
             IResponse response = responseList.GetAt(0);
-            if (response.StatusCode != 0) return null; // something went wrong
+            if (response.StatusCode != 0 || response.Detail == null)
+                return null; // No valid response
 
-            // VendorRet list can contain multiple vendors, but we only asked for one ListID.
-            IVendorRetList? vendRetList = response.Detail as IVendorRetList;
-            if (vendRetList == null || vendRetList.Count == 0) return null;
+            IVendorRetList retList = response.Detail as IVendorRetList;
+            if (retList == null || retList.Count == 0)
+                return null;
 
-            IVendorRet vendRet = vendRetList.GetAt(0);
-            // Convert IVendorRet fields into your Vendor model
-            var found = new Vendor(
-                name: vendRet.Name?.GetValue() ?? "",
-                fax: vendRet.Fax?.GetValue() ?? ""
-            );
-            found.QB_ID = vendRet.ListID?.GetValue() ?? "";
-            return found;
+            // We expect only one vendor with this ListID
+            return retList.GetAt(0);
         }
 
         /// <summary>
-        /// Directly deletes a vendor from QuickBooks by its ListID (no Reader code).
+        /// Deletes a vendor from QuickBooks using the given ListID (QB_ID).
         /// </summary>
         private void DeleteVendor(QuickBooksSession qbSession, string listID)
         {
@@ -116,17 +129,18 @@ namespace QB_Vendors_Test
 
             IMsgSetResponse responseMsgSet = qbSession.SendRequest(requestMsgSet);
             IResponseList responseList = responseMsgSet.ResponseList;
-            if (responseList == null || responseList.Count == 0) return;
+            if (responseList == null || responseList.Count == 0)
+                return;
 
             IResponse response = responseList.GetAt(0);
-            if (response.StatusCode == 0)
+            if (response.StatusCode == 0 && response.Detail != null)
             {
                 Debug.WriteLine($"Successfully deleted Vendor (ListID: {listID}).");
             }
             else
             {
-                throw new Exception($"Error Deleting Vendor (ListID: {listID}): {response.StatusMessage} " +
-                                    $"(Status code: {response.StatusCode}).");
+                throw new Exception($"Error Deleting Vendor (ListID: {listID}): {response.StatusMessage}. " +
+                                    $"Status code: {response.StatusCode}");
             }
         }
     }

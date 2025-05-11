@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace QB_Vendors_Lib
 {
-    public class VendorsComparator
+    public class VendorComparator
     {
         // Static dictionary to store the last set of vendors that were processed
         // This simulates what would normally be retrieved from QuickBooks

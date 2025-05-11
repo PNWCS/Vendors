@@ -1,9 +1,10 @@
 ﻿using System.Diagnostics;
 using Serilog;
-using QB_Vendors_Lib; // ← where your VendorsComparator lives
+using QB_Vendors_Lib;
+using QB_Vendors_Lib;     // ← where your VendorsComparator lives
 using QBFC16Lib;
-using static QB_Vendors_Test.CommonMethods; // for EnsureLogFileClosed, DeleteOldLogFiles, etc.
-using Xunit;
+using static QB_Vendors_Test.CommonMethods;
+using System.Xml.Linq;
 
 namespace QB_Vendors_Test
 {
@@ -19,7 +20,7 @@ namespace QB_Vendors_Test
             ResetLogger();
 
             // ── 1. create five unique vendors in memory (company file) ─────
-            const int START_ID = 10_000;
+            const int START_ID = 20_000;
             var initialVendors = new List<Vendor>();
 
             for (int i = 0; i < 5; i++)
@@ -38,7 +39,7 @@ namespace QB_Vendors_Test
             try
             {
                 // ── 2. first compare – expect every vendor to be Added ─────
-                firstCompareResult = VendorsComparator.CompareVendors(initialVendors);
+                firstCompareResult = VendorComparator.CompareVendors(initialVendors);
                 Debug.WriteLine("First compare result");
                 foreach (var vendor in firstCompareResult)
                 {
@@ -61,7 +62,7 @@ namespace QB_Vendors_Test
                 renamed.Name += "_Renamed";
 
                 // ── 4. second compare – expect Missing, Different, Unchanged ─
-                secondCompareResult = VendorsComparator.CompareVendors(updated);
+                secondCompareResult = VendorComparator.CompareVendors(updated);
 
                 Debug.WriteLine("Second compare result");
                 foreach (var vendor in secondCompareResult)
