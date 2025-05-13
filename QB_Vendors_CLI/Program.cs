@@ -1,23 +1,55 @@
-﻿using System.Net.NetworkInformation;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using ClosedXML.Excel;
 using QB_Vendors_Lib;
-//using Vendor_LIB;
 
-namespace Vendors
+namespace QB_Vendors_CLI
 {
-    class Program
+    public class Sample
     {
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
-            List<Vendor> vendorsToAdd = new List<Vendor>
+            LoggerConfig.ConfigureLogging();
+
+            string filePath = "C:\\Users\\DampuriR\\Downloads\\Example_Company_Excel.xlsx";
+
+            List<Vendor> companyVendors = new List<Vendor>();
+
+            // Ensure file exists
+            if (!File.Exists(filePath))
+                throw new FileNotFoundException($"The file '{filePath}' does not exist.");
+
+            using (var workbook = new XLWorkbook(filePath))
             {
-                new Vendor ( "Danny", "Amazon" ),
-                new Vendor ("Emma", "Microsoft" ),
-                new Vendor ("Kapil Dev", "Deloitte" )
-            };
+                var worksheet = workbook.Worksheet("vendors");
 
-            VendorAdder.AddVendors(vendorsToAdd);
+                // Get the range of used rows
+                var range = worksheet.RangeUsed();
+                if (range == null)
+                {
+                    Console.WriteLine("Warning: The worksheet is empty or contains no used range.");
+                }
+                else
+                {
+                    var rows = range.RowsUsed();
+                    foreach (var row in rows.Skip(1)) // Skip header row
+                    {
+                        string name = row.Cell(1).GetString().Trim();      // Column "Name"
+                        string companyName = row.Cell(2).GetString().Trim(); // Column "CompanyName"
 
-            //VendorReader.QueryAllVendors();
+                        companyVendors.Add(new Vendor(name, companyName));
+                    }
+                }
+            }
+
+            List<Vendor> vendors = VendorComparator.CompareVendors(companyVendors);
+            foreach (var vendor in vendors)
+            {
+                Console.WriteLine($"Vendor {vendor.Name} has the {vendor.Status} Status");
+            }
+
+            Console.WriteLine("Vendor Data Sync Completed");
         }
     }
 }

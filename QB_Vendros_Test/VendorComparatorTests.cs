@@ -1,123 +1,143 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Serilog;
-using QB_Vendors_Lib;      // Vendor, VendorStatus, VendorComparator
-using QBFC16Lib;          // QuickBooks SDK
-using static QB_Terms_Test.CommonMethods;  // Re-use logging helpers
+using QB_Vendors_Lib;
+using QB_Vendors_Lib;     // ← where your VendorsComparator lives
+using QBFC16Lib;
+using static QB_Vendors_Test.CommonMethods;
+using System.Xml.Linq;
 
 namespace QB_Vendors_Test
 {
     [Collection("Sequential Tests")]
-    public class VendorComparatorTests
+    public class VendorsComparatorTests
     {
         [Fact]
         public void CompareVendors_InMemoryScenario_And_Verify_Logs()
         {
-            // ⚙  Test-data setup (five entirely new vendors)
-            const string COMPANY_NAME = "ACME Widgets";
-            const int    VENDOR_COUNT = 5;
-
+            // ── 0. housekeeping ───────────────────────────────────────────────
             EnsureLogFileClosed();
             DeleteOldLogFiles();
             ResetLogger();
 
+            // ── 1. create five unique vendors in memory (company file) ─────
+            const int START_ID = 20_000;
             var initialVendors = new List<Vendor>();
-            for (int i = 0; i < VENDOR_COUNT; i++)
+
+            for (int i = 0; i < 5; i++)
             {
-                string uniqueName = $"TestVendor_{Guid.NewGuid():N}".Substring(0, 22); // QB name ≤41 chars
-                initialVendors.Add(new Vendor(uniqueName, COMPANY_NAME));
+                string suffix = Guid.NewGuid().ToString("N")[..8];
+                initialVendors.Add(new Vendor(
+                    $"TestVend_{suffix}",
+                    $"TestCo_{suffix}",
+                    $"{START_ID + i}"));
+                Debug.WriteLine($"Vendor {i}: {initialVendors[i].Name}");
             }
 
-            List<Vendor> firstCompareResult  = null;
-            List<Vendor> secondCompareResult = null;
+            List<Vendor> firstCompareResult = new();
+            List<Vendor> secondCompareResult = new();
 
             try
             {
-                // 🔄 1st compare → every vendor should be Added
+                // ── 2. first compare – expect every vendor to be Added ─────
                 firstCompareResult = VendorComparator.CompareVendors(initialVendors);
+                Debug.WriteLine("First compare result");
+                foreach (var vendor in firstCompareResult)
+                {
+                    Debug.WriteLine(vendor);
+                }
+
                 foreach (var v in firstCompareResult
-                                 .Where(v => initialVendors.Any(x => x.Name == v.Name)))
+                                 .Where(v => initialVendors.Any(x => x.Company_ID == v.Company_ID)))
                 {
                     Assert.Equal(VendorStatus.Added, v.Status);
                 }
 
-                // ✏️  Mutate list: remove one (Missing) & rename another (Different)
-                var updatedVendors   = new List<Vendor>(initialVendors);
-                var removedVendor    = updatedVendors[0];         // → Missing
-                var renamedVendor    = updatedVendors[1];         // → Different
-                updatedVendors.Remove(removedVendor);
-                renamedVendor.Name += "_Mod";
+                // ── 3. mutate list: remove one   ➜ Missing
+                //                  rename one     ➜ Different
+                var updated = new List<Vendor>(initialVendors);
+                var removed = updated[0];
+                var renamed = updated[1];
 
-                // 🔄 2nd compare → expect Missing / Different / Unchanged
-                secondCompareResult = VendorComparator.CompareVendors(updatedVendors);
-                var secondDict      = secondCompareResult.ToDictionary(v => v.Name);
+                updated.Remove(removed);
+                renamed.Name += "_Renamed";
 
-                // -- Missing
-                Assert.Contains(removedVendor.Name, secondDict.Keys);
-                Assert.Equal(VendorStatus.Missing, secondDict[removedVendor.Name].Status);
+                // ── 4. second compare – expect Missing, Different, Unchanged ─
+                secondCompareResult = VendorComparator.CompareVendors(updated);
 
-                // -- Different
-                Assert.Contains(renamedVendor.Name, secondDict.Keys);
-                Assert.Equal(VendorStatus.Different, secondDict[renamedVendor.Name].Status);
-
-                // -- Unchanged
-                foreach (var v in updatedVendors
-                                 .Except(new[] { renamedVendor }))
+                Debug.WriteLine("Second compare result");
+                foreach (var vendor in secondCompareResult)
                 {
-                    Assert.Equal(VendorStatus.Unchanged, secondDict[v.Name].Status);
+                    Debug.WriteLine(vendor);
+                }
+
+                var dict = secondCompareResult.ToDictionary(v => v.Company_ID);
+
+                Assert.Equal(VendorStatus.Missing, dict[removed.Company_ID].Status);
+                Assert.Equal(VendorStatus.Different, dict[renamed.Company_ID].Status);
+
+                foreach (var id in updated
+                                   .Select(v => v.Company_ID)
+                                   .Except(new[] { renamed.Company_ID }))
+                {
+                    Assert.Equal(VendorStatus.Unchanged, dict[id].Status);
                 }
             }
             finally
             {
-                // 🧹  Clean up: delete every vendor we added in pass 1
-                var addedVendors = firstCompareResult?
-                                   .Where(v => !string.IsNullOrEmpty(v.QB_ID))
-                                   .ToList();
+                // ── 5. clean up QB (remove Added vendors) ───────────────────
+                var added = firstCompareResult?
+                            .Where(v => !string.IsNullOrEmpty(v.QB_ID))
+                            .ToList();
 
-                if (addedVendors is { Count: >0 })
+                if (added is { Count: > 0 })
                 {
-                    using var qb   = new QuickBooksSession(AppConfig.QB_APP_NAME);
-                    foreach (var v in addedVendors)
+                    using var qb = new QuickBooksSession(AppConfig.QB_APP_NAME);
+                    foreach (var v in added)
                         DeleteVendor(qb, v.QB_ID);
                 }
             }
 
-            // 📑  Log-file assertions
+            // ── 6. verify logs ────────────────────────────────────────────────
             EnsureLogFileClosed();
             string logFile = GetLatestLogFile();
             EnsureLogFileExists(logFile);
+            string logs = File.ReadAllText(logFile);
 
-            string log = File.ReadAllText(logFile);
-            Assert.Contains("VendorComparator Initialized", log);
-            Assert.Contains("VendorComparator Completed",   log);
+            Assert.Contains("VendorsComparator Initialized", logs);
+            Assert.Contains("VendorsComparator Completed", logs);
 
-            foreach (var v in firstCompareResult.Concat(secondCompareResult))
+            void AssertLogged(IEnumerable<Vendor> vendors)
             {
-                string expected = $"Vendor {v.Name} is {v.Status}.";
-                Assert.Contains(expected, log);
+                foreach (var v in vendors)
+                    Assert.Contains($"Vendor {v.Name} is {v.Status}.", logs);
             }
+
+            AssertLogged(firstCompareResult);
+            AssertLogged(secondCompareResult);
         }
 
-        // QuickBooks cleanup helper
-        private void DeleteVendor(QuickBooksSession qbSession, string listID)
+        // ───────────────────── helper: delete vendor from QB ──────────────
+        private static void DeleteVendor(QuickBooksSession qbSession, string listID)
         {
-            IMsgSetRequest request = qbSession.CreateRequestSet();
-            IListDel delRq         = request.AppendListDelRq();
-            delRq.ListDelType.SetValue(ENListDelType.ldtVendor);
-            delRq.ListID.SetValue(listID);
+            IMsgSetRequest req = qbSession.CreateRequestSet();
+            IListDel del = req.AppendListDelRq();
+            del.ListDelType.SetValue(ENListDelType.ldtVendor);
+            del.ListID.SetValue(listID);
 
-            IMsgSetResponse response = qbSession.SendRequest(request);
-            WalkListDelResponse(response, listID);
+            IMsgSetResponse resp = qbSession.SendRequest(req);
+            WalkListDelResponse(resp, listID);
         }
 
-        private static void WalkListDelResponse(IMsgSetResponse resp, string listID)
+        private static void WalkListDelResponse(IMsgSetResponse respSet, string listID)
         {
-            var list = resp.ResponseList;
-            if (list is null || list.Count == 0) return;
+            IResponseList responses = respSet.ResponseList;
+            if (responses is null || responses.Count == 0) return;
 
-            var r = list.GetAt(0);
-            Debug.WriteLine(r.StatusCode == 0
-                ? $"✔ Deleted Vendor (ListID: {listID})."
-                : $"✖ Delete Vendor failed: {r.StatusMessage}");
+            IResponse resp = responses.GetAt(0);
+            Debug.WriteLine(resp.StatusCode == 0
+                ? $"Successfully deleted Vendor (ListID: {listID})."
+                : $"Error deleting Vendor: {resp.StatusMessage}");
         }
     }
 }
+

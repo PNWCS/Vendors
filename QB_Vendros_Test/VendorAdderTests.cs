@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Serilog;
 using QB_Vendors_Lib;
 using QBFC16Lib; // For QuickBooks session and API interaction.
@@ -145,3 +145,4 @@ namespace QB_Vendors_Test
         }
     }
 }
+
